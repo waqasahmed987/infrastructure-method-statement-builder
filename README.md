@@ -1,6 +1,6 @@
 # Deploy the Method Statement Builder — Step by Step
 
-This is a generic Streamlit app for building and infrastructure activities. The user enters an activity name; the app drafts the method statement and offers a Word download. It does not read or follow project specifications or drawings. A competent engineering, QA/QC and HSE team must review every draft before use.
+This is a generic Streamlit app for building and infrastructure activities. The user enters an activity name; the app uses the Groq API to draft the method statement and offers a Word download. It does not read or follow project specifications or drawings. A competent engineering, QA/QC and HSE team must review every draft before use.
 
 ## Files already prepared
 
@@ -11,13 +11,13 @@ Use the files in this folder. The full application source is [app.py](app.py); y
 - `.gitignore` — keeps local secrets and Python environment files out of GitHub.
 - `.streamlit/secrets.toml.example` — sample API key setting. Replace with the real key only in the deployment dashboard or your ignored local secrets file.
 
-## Step 1 — Get an OpenAI API key
+## Step 1 — Get a Groq API key
 
-1. Open [the OpenAI API keys page](https://platform.openai.com/api-keys) and sign in.
+1. Open [Groq Console API Keys](https://console.groq.com/keys) and sign in.
 2. Create a secret key. Copy it when it is displayed and store it privately; the complete key is only shown at creation.
 3. API requests may incur charges. Check the API account's billing and usage settings.
 
-Never paste the key into `app.py`, a public GitHub file, a chat, or a screenshot. OpenAI recommends keeping keys out of repositories and using a secret store or environment variable. See [OpenAI's API key safety guidance](https://help.openai.com/en/articles/5112595-best-practices-for-api-key-safety).
+Never paste the key into `app.py`, a public GitHub file, a chat, or a screenshot. Keep it in Streamlit Secrets or the ignored local secrets file. The app uses Groq's OpenAI-compatible API endpoint with the Groq base URL and API key, as described in [Groq's compatibility guide](https://console.groq.com/docs/openai).
 
 ## Step 2 — Create the GitHub repository
 
@@ -61,7 +61,7 @@ Git may open a browser sign-in window. Complete the GitHub sign-in and return to
 7. Paste this into **Secrets**, replacing the quoted example with your real API key:
 
    ```toml
-   OPENAI_API_KEY = "paste-your-real-api-key-here"
+   GROQ_API_KEY = "paste-your-real-groq-key-here"
    ```
 
 8. Select **Save**, then **Deploy**. Streamlit installs the libraries listed in `requirements.txt` and builds the app. The official deployment steps are in [Streamlit's Community Cloud guide](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy).
@@ -88,7 +88,7 @@ Copy-Item .streamlit\secrets.toml.example .streamlit\secrets.toml
 notepad .streamlit\secrets.toml
 ```
 
-In Notepad, replace the example value with your API key and save. Then run:
+In Notepad, replace the example value with your Groq key and save. Then run:
 
 ```powershell
 streamlit run app.py
@@ -121,7 +121,7 @@ Streamlit Community Cloud rebuilds the deployed app from the updated GitHub file
 ## Common deployment errors
 
 - **App cannot find a package:** confirm `requirements.txt` is in the repository root and wait for Streamlit to finish reinstalling dependencies.
-- **OPENAI_API_KEY missing:** add the TOML setting under Streamlit app Secrets, then reboot or redeploy.
+- **GROQ_API_KEY missing:** add the TOML setting under Streamlit app Secrets, then reboot or redeploy.
 - **Incorrect API key:** create a replacement key and update Streamlit Secrets.
 - **GitHub authentication failed:** sign in to GitHub in the browser and confirm the selected account has access to the repository.
 - **Generation fails after deploy:** view the Streamlit app logs and check the API key, model access and API account usage.
@@ -131,4 +131,4 @@ Streamlit Community Cloud rebuilds the deployed app from the updated GitHub file
 - Output is a generic AI draft based only on the activity name. It does not use project specifications, drawings, or site files.
 - The sketch is an indicative process flow, not an engineered or scale drawing.
 - Competent personnel must review site-specific methods, acceptance criteria, hold points, frequencies, permits, risk ratings and controls.
-- The model default is `gpt-5`. To select a different model, configure `OPENAI_MODEL` as a Streamlit secret/environment variable and confirm the account has access to it.
+- The default Groq model is `openai/gpt-oss-20b`, which supports Groq structured JSON outputs. To select a different compatible model, configure `GROQ_MODEL` as a Streamlit secret/environment variable and confirm that model supports the app's strict JSON schema. See [Groq's Structured Outputs documentation](https://console.groq.com/docs/structured-outputs).
