@@ -1,6 +1,6 @@
 # Deploy the Method Statement Builder — Step by Step
 
-This is a generic Streamlit app for building and infrastructure activities. The user enters an activity name; the app uses the Groq API to draft the method statement and offers a Word download. It does not read or follow project specifications or drawings. A competent engineering, QA/QC and HSE team must review every draft before use.
+This is a generic Streamlit app for building and infrastructure activities. The user enters an activity name; the app uses the Groq API to draft a detailed method statement and offers a Word download. It includes a sequential work method, two generated conceptual sketches, activity-relevant ITP, field checklist, safety risk assessment, environmental and emergency controls, and review fields. It does not read or follow project specifications or drawings. A competent engineering, QA/QC and HSE team must review every draft before use.
 
 ## Files already prepared
 
@@ -104,6 +104,7 @@ If you need to recreate `requirements.txt`, its full contents are:
 streamlit>=1.39,<2
 openai>=1.60,<3
 python-docx>=1.1,<2
+matplotlib>=3.9,<4
 ```
 
 ## Update the app later
@@ -131,4 +132,6 @@ Streamlit Community Cloud rebuilds the deployed app from the updated GitHub file
 - Output is a generic AI draft based only on the activity name. It does not use project specifications, drawings, or site files.
 - The sketch is an indicative process flow, not an engineered or scale drawing.
 - Competent personnel must review site-specific methods, acceptance criteria, hold points, frequencies, permits, risk ratings and controls.
-- The default Groq model is `openai/gpt-oss-20b`, which supports Groq structured JSON outputs. To select a different compatible model, configure `GROQ_MODEL` as a Streamlit secret/environment variable and confirm that model supports the app's strict JSON schema. See [Groq's Structured Outputs documentation](https://console.groq.com/docs/structured-outputs).
+- The default Groq model is `openai/gpt-oss-20b`. The app requests JSON mode, normalizes common array wrappers, allows up to 8,192 completion tokens, and uses low reasoning effort. To select a different compatible model, configure `GROQ_MODEL` in the runtime environment. See [Groq's JSON mode and structured output documentation](https://console.groq.com/docs/structured-outputs) and [API parameter reference](https://console.groq.com/docs/api-reference).
+
+The expanded detail level requires `matplotlib` for the two Word sketches. Make sure the updated `requirements.txt` is pushed with the app; Streamlit will reinstall dependencies during its next build.
