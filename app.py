@@ -15,38 +15,75 @@ MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 st.set_page_config(page_title="Infrastructure Method Statement Builder", page_icon="🏗️", layout="wide")
 
 
-SCHEMA = {
-    "type": "object", "additionalProperties": False,
-    "properties": {
-        "title": {"type": "string"}, "purpose": {"type": "string"}, "scope": {"type": "string"},
-        "resources": {"type": "array", "items": {"type": "string"}},
-        "roles": {"type": "array", "items": {"type": "object", "properties": {"role": {"type": "string"}, "duty": {"type": "string"}}, "required": ["role", "duty"], "additionalProperties": False}},
-        "preconditions": {"type": "array", "items": {"type": "string"}},
-        "sequence": {"type": "array", "items": {"type": "object", "properties": {"step": {"type": "string"}, "method": {"type": "string"}, "release": {"type": "string"}}, "required": ["step", "method", "release"], "additionalProperties": False}},
-        "itp": {"type": "array", "items": {"type": "object", "properties": {"stage": {"type": "string"}, "check": {"type": "string"}, "acceptance": {"type": "string"}, "frequency": {"type": "string"}, "record": {"type": "string"}, "point": {"type": "string"}, "owner": {"type": "string"}}, "required": ["stage", "check", "acceptance", "frequency", "record", "point", "owner"], "additionalProperties": False}},
-        "checklist": {"type": "array", "items": {"type": "string"}},
-        "risks": {"type": "array", "items": {"type": "object", "properties": {"hazard": {"type": "string"}, "effect": {"type": "string"}, "initial": {"type": "string"}, "controls": {"type": "string"}, "residual": {"type": "string"}, "owner": {"type": "string"}}, "required": ["hazard", "effect", "initial", "controls", "residual", "owner"], "additionalProperties": False}},
-        "environment": {"type": "array", "items": {"type": "string"}}, "emergency": {"type": "array", "items": {"type": "string"}},
-        "sketch": {"type": "array", "items": {"type": "string"}}, "gaps": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["title", "purpose", "scope", "resources", "roles", "preconditions", "sequence", "itp", "checklist", "risks", "environment", "emergency", "sketch", "gaps"]
-}
-
-
 def draft(activity, key):
-    prompt = f"""Draft a generic, comprehensive infrastructure/building construction method statement for this activity: {activity}. The activity name is the only project input. Cover preparation, execution, inspection, completion and handover. Do not claim compliance with project documents or cite specifications/drawings. Do not invent project-specific drawing IDs, dimensions, tolerances, acceptance limits, test frequencies, permits or risk scores. Where site-specific values or approvals are needed, say 'Confirm before work starts' and list the gap. Use broadly applicable good construction practice and practical safety controls, while clearly marking this as a generic draft. ITP points must be H (hold), W (witness), R (review), or S (surveillance); where the project-specific point is unknown, state 'Confirm before work starts'. Risk ratings must say 'Assess using site risk assessment process' rather than assigning unsupported scores. Sketch is 5-9 short sequential labels for an indicative process flow, never a design drawing. All output requires competent engineering, quality and HSE review before use.\n\nActivity: {activity}"""
+    prompt = f"""Draft a generic infrastructure/building method statement for this activity: {activity}. The activity name is the only project input. Cover preparation, work steps, inspection, completion and handover. Do not claim compliance with project documents or cite specifications/drawings. Do not invent project-specific dimensions, tolerances, acceptance limits, test frequencies, permits or risk scores. Mark site-specific unknowns 'Confirm before work starts' and list them in gaps. Keep every text field concise (1-3 sentences) to fit the document. ITP points must be H, W, R or S; where unknown, say 'Confirm before work starts'. Risk ratings must say 'Assess using site risk assessment process'. Sketch must contain 5-9 short process labels, not a design drawing. Require competent engineering, quality and HSE review.
+
+Return one valid JSON object only, with exactly these keys and value types. Do not wrap arrays in objects, and do not include the words 'items' or 'type' as wrapper fields:
+{{"title":"string","purpose":"string","scope":"string","resources":["string"],"roles":[{{"role":"string","duty":"string"}}],"preconditions":["string"],"sequence":[{{"step":"string","method":"string","release":"string"}}],"itp":[{{"stage":"string","check":"string","acceptance":"string","frequency":"string","record":"string","point":"string","owner":"string"}}],"checklist":["string"],"risks":[{{"hazard":"string","effect":"string","initial":"string","controls":"string","residual":"string","owner":"string"}}],"environment":["string"],"emergency":["string"],"sketch":["string"],"gaps":["string"]}}
+
+Activity: {activity}"""
     client = OpenAI(api_key=key, base_url="https://api.groq.com/openai/v1")
     response = client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         max_completion_tokens=8192,
         reasoning_effort="low",
-        response_format={"type": "json_schema", "json_schema": {"name": "method_statement", "strict": True, "schema": SCHEMA}},
+        response_format={"type": "json_object"},
     )
     content = response.choices[0].message.content
     if not content:
         raise ValueError("Groq returned an empty response. Try again or check model access.")
-    return json.loads(content)
+    try:
+        raw = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Groq returned invalid JSON. Please try generating again.") from exc
+    return normalize_result(raw)
+
+
+def normalize_result(raw):
+    """Repair common JSON-mode wrappers and fill missing sections safely."""
+    if not isinstance(raw, dict):
+        raise ValueError("Groq returned a JSON value that was not an object. Please try again.")
+
+    string_fields = ("title", "purpose", "scope")
+    string_lists = ("resources", "preconditions", "checklist", "environment", "emergency", "sketch", "gaps")
+    object_lists = {
+        "roles": ("role", "duty"),
+        "sequence": ("step", "method", "release"),
+        "itp": ("stage", "check", "acceptance", "frequency", "record", "point", "owner"),
+        "risks": ("hazard", "effect", "initial", "controls", "residual", "owner"),
+    }
+
+    def unwrap(value):
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            for key in ("items", "values", "data"):
+                if isinstance(value.get(key), list):
+                    return value[key]
+        return []
+
+    for key in string_fields:
+        value = raw.get(key, "")
+        raw[key] = value if isinstance(value, str) else str(value)
+    for key in string_lists:
+        values = unwrap(raw.get(key))
+        cleaned = []
+        for item in values:
+            if isinstance(item, str):
+                cleaned.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("item") or item.get("description")
+                if isinstance(text, str):
+                    cleaned.append(text)
+        raw[key] = cleaned
+    for key, fields in object_lists.items():
+        values = unwrap(raw.get(key))
+        raw[key] = [
+            {field: (item.get(field) if isinstance(item.get(field), str) else "Confirm before work starts") for field in fields}
+            for item in values if isinstance(item, dict)
+        ]
+    return raw
 
 
 def table(doc, headers, rows):
