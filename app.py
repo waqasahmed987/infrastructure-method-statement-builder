@@ -10,7 +10,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
 from openai import OpenAI
 
-MODEL = os.getenv("OPENAI_MODEL", "gpt-5")
+MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
 st.set_page_config(page_title="Infrastructure Method Statement Builder", page_icon="🏗️", layout="wide")
 
@@ -35,11 +35,16 @@ SCHEMA = {
 
 def draft(activity, key):
     prompt = f"""Draft a generic, comprehensive infrastructure/building construction method statement for this activity: {activity}. The activity name is the only project input. Cover preparation, execution, inspection, completion and handover. Do not claim compliance with project documents or cite specifications/drawings. Do not invent project-specific drawing IDs, dimensions, tolerances, acceptance limits, test frequencies, permits or risk scores. Where site-specific values or approvals are needed, say 'Confirm before work starts' and list the gap. Use broadly applicable good construction practice and practical safety controls, while clearly marking this as a generic draft. ITP points must be H (hold), W (witness), R (review), or S (surveillance); where the project-specific point is unknown, state 'Confirm before work starts'. Risk ratings must say 'Assess using site risk assessment process' rather than assigning unsupported scores. Sketch is 5-9 short sequential labels for an indicative process flow, never a design drawing. All output requires competent engineering, quality and HSE review before use.\n\nActivity: {activity}"""
-    response = OpenAI(api_key=key).responses.create(
-        model=MODEL, input=[{"role": "user", "content": prompt}],
-        text={"format": {"type": "json_schema", "name": "method_statement", "strict": True, "schema": SCHEMA}},
+    client = OpenAI(api_key=key, base_url="https://api.groq.com/openai/v1")
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_schema", "json_schema": {"name": "method_statement", "strict": True, "schema": SCHEMA}},
     )
-    return json.loads(response.output_text)
+    content = response.choices[0].message.content
+    if not content:
+        raise ValueError("Groq returned an empty response. Try again or check model access.")
+    return json.loads(content)
 
 
 def table(doc, headers, rows):
@@ -95,13 +100,13 @@ def make_doc(data, activity):
 
 
 st.title("Infrastructure & Buildings Method Statement Builder")
-st.caption("Enter an activity name to draft a method statement and download it in Word format.")
+st.caption("Enter an activity name to draft a method statement and download it in Word format. Powered by Groq.")
 st.warning("Every generated document is a draft requiring competent engineering, QA/QC and HSE review before approval or construction use.")
 st.info("This version generates generic drafts from the activity name only. It does not use or claim compliance with project specifications or drawings.")
 activity = st.text_input("Activity name", placeholder="e.g., Reinforced concrete foundation construction")
-api_key = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+api_key = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
 if st.button("Generate method statement", type="primary", disabled=not activity.strip()):
-    if not api_key: st.error("Configure OPENAI_API_KEY in Streamlit secrets before generating.")
+    if not api_key: st.error("Configure GROQ_API_KEY in Streamlit secrets before generating.")
     else:
         with st.spinner("Generating a generic activity draft…"):
             try: st.session_state.generated = (draft(activity.strip(), api_key), activity.strip())
