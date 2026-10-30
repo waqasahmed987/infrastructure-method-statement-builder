@@ -39,6 +39,8 @@ def draft(activity, key):
     response = client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
+        max_completion_tokens=8192,
+        reasoning_effort="low",
         response_format={"type": "json_schema", "json_schema": {"name": "method_statement", "strict": True, "schema": SCHEMA}},
     )
     content = response.choices[0].message.content
